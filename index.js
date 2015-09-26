@@ -7,11 +7,13 @@ var	request = require('request'),
     winston = module.parent.require('winston'),
     S = module.parent.require('string'),
     meta = module.parent.require('./meta'),
+    util = module.parent.require('util'),
 
     issueRegex = /(?:^|[\s])(?:[\w\d\-.]+\/[\w\d\-.]+|gh|GH)#\d+\b/gm,
     commitRegex = /(?:^|[\s])(?:[\w\d\-.]+\/[\w\d\-.]+|gh|GH)@[A-Fa-f0-9]{7,}\b/gm,
     fullUrlIssueRegex = /https:\/\/github.com\/([\w\d\-.]+\/[\w\d\-.]+)\/issues\/([\d]+)/g,
     fullUrlCommitRegex = /https:\/\/github.com\/([\w\d\-.]+\/[\w\d\-.]+)\/commit\/([A-Fa-f0-9]{7,})/g,
+    fullUrlFilterStub = '<br />\n<a href="match" rel="nofollow">match</a>',
     Embed = {},
     issueCache, commitCache, defaultRepo, tokenString, personalAccessToken, appModule;
 
@@ -66,14 +68,25 @@ Embed.parse = function(data, callback) {
             if (match !== null && issueKeys.indexOf(match) === -1) {
                 issueKeys.push(match);
             }
+            if (raw) {
+                data = data.replace(match, '');
+            } else {
+                data.postData.content = data.postData.content.replace(match, '');
+            }
         });
     }
 
     while(fullUrlIssueMatch.obj = fullUrlIssueRegex.exec(cleanedText)) {
+        fullUrlIssueMatch.filter = fullUrlFilterStub.replace(/match/g, fullUrlIssueMatch.obj[0]);
         fullUrlIssueMatch.repo = fullUrlIssueMatch.obj[1];
         fullUrlIssueMatch.issue = fullUrlIssueMatch.obj[2];
 
         issueKeys.push([fullUrlIssueMatch.repo, fullUrlIssueMatch.issue].join('#'));
+        if (raw) {
+            data = data.replace(fullUrlIssueMatch.filter, '');
+        } else {
+            data.postData.content = data.postData.content.replace(fullUrlIssueMatch.filter, '');
+        }
     }
 
     if (commitMatches && commitMatches.length) {
@@ -92,14 +105,26 @@ Embed.parse = function(data, callback) {
             if (match !== null && commitKeys.indexOf(match) === -1) {
                 commitKeys.push(match);
             }
+
+            if (raw) {
+                data = data.replace(match, '');
+            } else {
+                data.postData.content = data.postData.content.replace(match, '');
+            }
         });
     }
 
     while(fullUrlCommitMatch.obj = fullUrlCommitRegex.exec(cleanedText)) {
+        fullUrlCommitMatch.filter = fullUrlFilterStub.replace(/match/g, fullUrlCommitMatch.obj[0]);
         fullUrlCommitMatch.repo = fullUrlCommitMatch.obj[1];
         fullUrlCommitMatch.commit = fullUrlCommitMatch.obj[2];
 
         commitKeys.push([fullUrlCommitMatch.repo, fullUrlCommitMatch.commit].join('@'));
+        if (raw) {
+            data = data.replace(fullUrlCommitMatch.filter, '');
+        } else {
+            data.postData.content = data.postData.content.replace(fullUrlCommitMatch.filter, '');
+        }
     }
 
     async.parallel({
@@ -240,7 +265,7 @@ var getCommitData = function(commitKey, callback) {
         if (response && response.statusCode === 200) {
             var commit = JSON.parse(body);
             commit.author = commit.author || {};
-            
+
             var returnData = {
                     type: {
                         issue: false,
